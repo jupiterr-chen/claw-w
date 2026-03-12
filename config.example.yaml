@@ -1,0 +1,32 @@
+auth:
+  cookie: "SUB=your_cookie_here; SUBP=your_cookie_here;"
+
+targets:
+  user_ids:
+    - "1234567890"
+  since_date: null
+  include_retweets: false
+
+download:
+  images: true
+  image_timeout: 15
+
+storage:
+  base_dir: "./weibo_data"
+  db_path: "./weibo_data/history.db"
+
+network:
+  delay_min: 3
+  delay_max: 8
+  timeout: 10
+  max_retries: 3
+  user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
+
+logging:
+  level: "INFO"
+  file: "./weibo_data/logs/weibo_crawler.log"
+  console: true
+
+task:
+  run_mode: "once"   # once|daemon
+  run_at: "00:05"    # daemon 模式下每天执行时间
