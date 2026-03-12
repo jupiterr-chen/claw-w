@@ -6,3 +6,4 @@ __pycache__/
 config.yaml
 weibo_data/
 .DS_Store
+config.yaml
