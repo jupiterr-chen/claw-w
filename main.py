@@ -50,6 +50,11 @@ def run_once(cfg: dict):
 
     for uid in cfg["targets"]["user_ids"]:
         logger.info(f"开始抓取 UID={uid}")
+        
+        # 连续多少条已经是处理过的数据就认为该页/该次抓取可以提前结束
+        stop_threshold = 10
+        consecutive_processed = 0
+
         for page in range(1, 11):
             try:
                 data = crawler.fetch_user_page(uid, page=page)
@@ -65,7 +70,12 @@ def run_once(cfg: dict):
             new_count = 0
             for post in cards:
                 if tracker.is_processed(post["id"]):
+                    consecutive_processed += 1
                     continue
+                
+                # 遇到新数据重置连续计数
+                consecutive_processed = 0
+                
                 saved = storage.save_post(post, download_images=dl_images, image_timeout=img_timeout)
                 tracker.mark_processed(post["id"], uid, int(post["created_ts"]))
                 new_count += 1
@@ -76,6 +86,11 @@ def run_once(cfg: dict):
                 day_stats[date_key]["uids"].add(uid)
 
             logger.info(f"uid={uid} page={page} 新增 {new_count} 条")
+            
+            # 如果连续处理过的数量达到阈值，触发提前终止策略
+            if consecutive_processed >= stop_threshold:
+                logger.info(f"uid={uid} 连续遇到 {consecutive_processed} 条已下载数据，触发提前终止策略。")
+                break
 
     # 写 summary.json
     for date_key, st in day_stats.items():

@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
@@ -40,10 +41,16 @@ class StorageManager:
 
         saved = 0
         pics: List[str] = post.get("pics", [])
-        if download_images:
-            for i, url in enumerate(pics, start=1):
-                if self._download_image(url, post_dir / f"img_{i}.jpg", timeout=image_timeout):
-                    saved += 1
+        if download_images and pics:
+            # 使用线程池并发下载图片，最多同时下载3张
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                future_to_url = {
+                    executor.submit(self._download_image, url, post_dir / f"img_{i}.jpg", image_timeout):
+                    url for i, url in enumerate(pics, start=1)
+                }
+                for future in as_completed(future_to_url):
+                    if future.result():
+                        saved += 1
 
         return {
             "date_dir": str(date_dir),
