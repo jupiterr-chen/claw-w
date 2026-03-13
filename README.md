@@ -6,6 +6,7 @@
 - 按 UID 抓取微博（增量抓取）
 - 自动处理正文文本（含 HTML 清洗）
 - 自动提取并下载原图（可关闭）
+- 支持本地 OCR（tesseract / paddle，可选）
 - 按日期归档：`YYYY-MM-DD/Post_HHMMSS_ShortID/`
 - 每日写入 `summary.json`
 - 支持本机运行与 Docker 运行
@@ -47,6 +48,12 @@ cp config.example.yaml config.yaml
 ```bash
 python main.py --config config.yaml --mode once
 ```
+
+### 3.1 覆盖存储目录（大容量磁盘推荐）
+```bash
+python main.py --config config.yaml --mode once --base-dir /path/to/weibo_data
+```
+说明：`--base-dir` 会同时覆盖默认的 `history.db` 和日志文件路径到该目录下。
 
 ### 4. 守护模式（每天定时）
 ```bash

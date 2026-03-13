@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Any, Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import hashlib
 
 import requests
 
@@ -63,6 +64,20 @@ class StorageManager:
     def write_summary(self, date_dir: str, summary: Dict[str, Any]):
         path = Path(date_dir) / "summary.json"
         path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def append_jsonl(self, relative_path: str, row: Dict[str, Any]):
+        p = self.base_dir / relative_path
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    @staticmethod
+    def file_sha256(path: str | Path) -> str:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+        return h.hexdigest()
 
     @staticmethod
     def _download_image(url: str, path: Path, timeout: int = 15) -> bool:

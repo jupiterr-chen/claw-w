@@ -1,10 +1,10 @@
 auth:
-  cookie: "SUB=your_cookie_here; SUBP=your_cookie_here;"
+  cookie: "请填写微博登录 Cookie"
 
 targets:
   user_ids:
-    - "1234567890"
-  since_date: null
+    - "1644724561"
+  since_date: "2026-03-12"
   include_retweets: false
 
 download:
@@ -12,6 +12,7 @@ download:
   image_timeout: 15
 
 storage:
+  # 默认存储目录（可通过 CLI --base-dir 临时覆盖）
   base_dir: "./weibo_data"
   db_path: "./weibo_data/history.db"
 
@@ -26,6 +27,15 @@ logging:
   level: "INFO"
   file: "./weibo_data/logs/weibo_crawler.log"
   console: true
+
+ocr:
+  enabled: false
+  # tesseract | paddle
+  engine: "tesseract"
+  lang: "chi_sim+eng"
+  use_gpu: false
+  # 相对 base_dir 的 JSONL 输出
+  output_jsonl: "ocr/ocr_results.jsonl"
 
 task:
   run_mode: "once"   # once|daemon
