@@ -106,6 +106,8 @@ cp config.example.yaml config.yaml
 docker compose up -d --build
 ```
 
+> 说明：Dockerfile 默认使用镜像源 `m.daocloud.io/docker.io/python:3.11-slim`，用于规避部分网络环境下拉取 `docker.io` 的 size validation 错误。
+
 ### 2.1 新机器一键初始化（推荐）
 ```bash
 bash scripts/bootstrap_new_machine.sh
