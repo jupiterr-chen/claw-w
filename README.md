@@ -69,6 +69,26 @@ python main.py --config config.yaml --mode daemon
 
 ## 2) Docker 方案
 
+### OCR 两套可选方案（适用于 Windows 新机器）
+
+#### 方案 A：Paddle（推荐，当前默认）
+- 优点：效果更强，适合后续结构化提取
+- 缺点：首次下载模型较慢
+- 配置：`config.yaml` 中设置 `ocr.engine: "paddle"`
+- 启动：
+```bash
+docker compose up -d --build
+```
+
+#### 方案 B：Tesseract（稳定、轻量）
+- 优点：依赖清晰，运行稳定
+- 缺点：中文识别效果通常弱于 Paddle
+- 配置：`config.yaml` 中设置 `ocr.engine: "tesseract"`
+- 启动（使用 tesseract 专用镜像）：
+```bash
+docker compose -f docker-compose.tesseract.yml up -d --build
+```
+
 ### 1. 准备配置
 ```bash
 cp config.example.yaml config.yaml

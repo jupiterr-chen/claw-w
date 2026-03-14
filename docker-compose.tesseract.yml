@@ -1,0 +1,11 @@
+services:
+  weibo-crawler:
+    build:
+      context: .
+      dockerfile: Dockerfile.tesseract
+    container_name: weibo-crawler-tesseract
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./weibo_data:/app/weibo_data
+    command: ["python", "main.py", "--config", "config.yaml", "--mode", "daemon"]
