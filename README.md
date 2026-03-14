@@ -107,6 +107,14 @@ docker compose up -d --build
 ```
 
 > 说明：Dockerfile 默认使用镜像源 `m.daocloud.io/docker.io/python:3.11-slim-bookworm`，用于规避部分网络环境下拉取 `docker.io` 的 size validation 错误与 apt 源 404 问题。
+>
+> 若构建需要代理（Windows/WSL 常见），请不要填 `127.0.0.1`，应使用 `host.docker.internal`：
+> ```bash
+> export APT_HTTP_PROXY=http://host.docker.internal:10809
+> export APT_HTTPS_PROXY=http://host.docker.internal:10809
+> export PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+> docker compose build --no-cache --pull
+> ```
 
 ### 2.1 新机器一键初始化（推荐）
 ```bash

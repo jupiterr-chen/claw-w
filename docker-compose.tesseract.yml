@@ -3,6 +3,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.tesseract
+      args:
+        APT_HTTP_PROXY: ${APT_HTTP_PROXY:-}
+        APT_HTTPS_PROXY: ${APT_HTTPS_PROXY:-}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
     container_name: weibo-crawler-tesseract
     restart: unless-stopped
     volumes:

@@ -1,6 +1,11 @@
 services:
   weibo-crawler:
-    build: .
+    build:
+      context: .
+      args:
+        APT_HTTP_PROXY: ${APT_HTTP_PROXY:-}
+        APT_HTTPS_PROXY: ${APT_HTTPS_PROXY:-}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
     container_name: weibo-crawler
     restart: unless-stopped
     volumes:

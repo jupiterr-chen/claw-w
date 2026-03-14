@@ -7,8 +7,15 @@ WORKDIR /app
 ENV PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
 ENV PYTHONUNBUFFERED=1
 
+# 可选构建代理（示例：http://host.docker.internal:10809）
+ARG APT_HTTP_PROXY=
+ARG APT_HTTPS_PROXY=
+ARG PIP_INDEX_URL=
+
 COPY requirements.txt /app/requirements.txt
-RUN apt-get update \
+RUN if [ -n "$APT_HTTP_PROXY" ]; then echo "Acquire::http::Proxy \"$APT_HTTP_PROXY\";" > /etc/apt/apt.conf.d/99proxy; fi \
+    && if [ -n "$APT_HTTPS_PROXY" ]; then echo "Acquire::https::Proxy \"$APT_HTTPS_PROXY\";" >> /etc/apt/apt.conf.d/99proxy; fi \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
         libgl1 \
         libglib2.0-0 \
@@ -16,8 +23,7 @@ RUN apt-get update \
         libxext6 \
         libxrender1 \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir -r requirements.txt
-
+    && if [ -n "$PIP_INDEX_URL" ]; then pip install --no-cache-dir -i "$PIP_INDEX_URL" -r requirements.txt; else pip install --no-cache-dir -r requirements.txt; fi
 COPY . /app
 
 # 默认执行一次，可用 docker compose 覆盖
