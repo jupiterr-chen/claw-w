@@ -23,7 +23,13 @@ class StorageManager:
         self.curated_dir.mkdir(parents=True, exist_ok=True)
         self.images_dir.mkdir(parents=True, exist_ok=True)
 
-    def save_post(self, post: Dict[str, Any], download_images: bool = True, image_timeout: int = 15) -> Dict[str, Any]:
+    def save_post(
+        self,
+        post: Dict[str, Any],
+        download_images: bool = True,
+        image_timeout: int = 15,
+        append_post_row: bool = True,
+    ) -> Dict[str, Any]:
         post_id = str(post["id"])
         post_image_dir = self.images_dir / post_id
         post_image_dir.mkdir(parents=True, exist_ok=True)
@@ -45,18 +51,19 @@ class StorageManager:
                         image_paths.append(str(out_path))
 
         # raw/posts.jsonl：保真原始微博数据 + 本地落盘路径
-        raw_post_row = {
-            "post_id": post_id,
-            "user_id": post.get("user_id"),
-            "created_ts": post.get("created_ts"),
-            "created_at": post.get("created_at"),
-            "text": post.get("text", ""),
-            "pics": pics,
-            "source": post.get("source", ""),
-            "images_saved": saved,
-            "image_paths": sorted(image_paths),
-        }
-        self.append_jsonl("raw/posts.jsonl", raw_post_row)
+        if append_post_row:
+            raw_post_row = {
+                "post_id": post_id,
+                "user_id": post.get("user_id"),
+                "created_ts": post.get("created_ts"),
+                "created_at": post.get("created_at"),
+                "text": post.get("text", ""),
+                "pics": pics,
+                "source": post.get("source", ""),
+                "images_saved": saved,
+                "image_paths": sorted(image_paths),
+            }
+            self.append_jsonl("raw/posts.jsonl", raw_post_row)
 
         return {
             "post_id": post_id,

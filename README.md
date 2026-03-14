@@ -56,6 +56,11 @@ cp config.example.yaml config.yaml
 python main.py --config config.yaml --mode once
 ```
 
+### 3.1 强制重跑 OCR（已处理微博也会重下图片并重识别）
+```bash
+python main.py --config config.yaml --mode once --reprocess-ocr
+```
+
 ### 3.1 覆盖存储目录（大容量磁盘推荐）
 ```bash
 python main.py --config config.yaml --mode once --base-dir /path/to/weibo_data

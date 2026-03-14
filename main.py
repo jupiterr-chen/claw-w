@@ -49,7 +49,7 @@ def _infer_signal_asset(text: str) -> str:
     return "UNKNOWN"
 
 
-def run_once(cfg: dict):
+def run_once(cfg: dict, reprocess_ocr: bool = False):
     logger = setup_logger(
         cfg["logging"]["file"],
         level=cfg["logging"].get("level", "INFO"),
@@ -106,16 +106,24 @@ def run_once(cfg: dict):
 
             new_count = 0
             for post in cards:
-                if tracker.is_processed(post["id"]):
+                already_processed = tracker.is_processed(post["id"])
+                if already_processed and not reprocess_ocr:
                     consecutive_processed += 1
                     if consecutive_processed >= stop_threshold:
                         break
                     continue
 
+                # reprocess_ocr 模式下，不触发“连续已处理提前终止”
                 consecutive_processed = 0
-                saved = storage.save_post(post, download_images=dl_images, image_timeout=img_timeout)
-                tracker.mark_processed(post["id"], uid, int(post["created_ts"]))
-                new_count += 1
+                saved = storage.save_post(
+                    post,
+                    download_images=(True if reprocess_ocr else dl_images),
+                    image_timeout=img_timeout,
+                    append_post_row=(not already_processed),
+                )
+                if not already_processed:
+                    tracker.mark_processed(post["id"], uid, int(post["created_ts"]))
+                    new_count += 1
 
                 date_key = datetime.fromtimestamp(int(post["created_ts"])).strftime("%Y-%m-%d")
                 day_stats[date_key]["posts"] += 1
@@ -152,21 +160,22 @@ def run_once(cfg: dict):
                         (Path(saved["image_dir"]) / "ocr.txt").write_text("\n\n".join(ocr_texts), encoding="utf-8")
 
                 merged_text = (post.get("text", "") + "\n" + "\n".join(ocr_texts)).strip()
-                storage.append_jsonl(
-                    signals_jsonl,
-                    {
-                        "source_post_id": saved["post_id"],
-                        "author": uid,
-                        "published_at": post.get("created_at"),
-                        "asset": _infer_signal_asset(merged_text),
-                        "stance": "neutral",
-                        "horizon": "unknown",
-                        "confidence": "low",
-                        "evidence_text": (merged_text[:280] if merged_text else post.get("text", "")[:280]),
-                        "tags": [],
-                        "ocr_used": bool(ocr_texts),
-                    },
-                )
+                if not already_processed:
+                    storage.append_jsonl(
+                        signals_jsonl,
+                        {
+                            "source_post_id": saved["post_id"],
+                            "author": uid,
+                            "published_at": post.get("created_at"),
+                            "asset": _infer_signal_asset(merged_text),
+                            "stance": "neutral",
+                            "horizon": "unknown",
+                            "confidence": "low",
+                            "evidence_text": (merged_text[:280] if merged_text else post.get("text", "")[:280]),
+                            "tags": [],
+                            "ocr_used": bool(ocr_texts),
+                        },
+                    )
 
                 logger.info(f"post={saved['post_id']} images={saved['images_saved']} saved={saved['image_dir']}")
 
@@ -204,6 +213,7 @@ def main():
     parser.add_argument("--config", default="config.yaml", help="配置文件路径")
     parser.add_argument("--mode", choices=["once", "daemon"], default=None)
     parser.add_argument("--base-dir", default=None, help="覆盖 storage.base_dir（例如 /mnt/weibo_data）")
+    parser.add_argument("--reprocess-ocr", action="store_true", help="对已处理微博强制重下图片并重跑 OCR")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -211,13 +221,13 @@ def main():
     mode = args.mode or cfg.get("task", {}).get("run_mode", "once")
 
     if mode == "once":
-        run_once(cfg)
+        run_once(cfg, reprocess_ocr=args.reprocess_ocr)
         return
 
     run_at = cfg.get("task", {}).get("run_at", "00:05")
-    schedule.every().day.at(run_at).do(lambda: run_once(cfg))
+    schedule.every().day.at(run_at).do(lambda: run_once(cfg, reprocess_ocr=False))
     print(f"[daemon] 已启动，计划每天 {run_at} 执行。先执行一次初始化抓取...")
-    run_once(cfg)
+    run_once(cfg, reprocess_ocr=False)
 
     while True:
         schedule.run_pending()
