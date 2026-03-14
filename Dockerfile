@@ -22,6 +22,7 @@ RUN if [ -n "$APT_HTTP_PROXY" ]; then echo "Acquire::http::Proxy \"$APT_HTTP_PRO
         libsm6 \
         libxext6 \
         libxrender1 \
+        libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
     && if [ -n "$PIP_INDEX_URL" ]; then pip install --no-cache-dir -i "$PIP_INDEX_URL" -r requirements.txt; else pip install --no-cache-dir -r requirements.txt; fi
 COPY . /app
