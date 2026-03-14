@@ -80,6 +80,18 @@ cp config.example.yaml config.yaml
 docker compose up -d --build
 ```
 
+### 2.1 新机器一键初始化（推荐）
+```bash
+bash scripts/bootstrap_new_machine.sh
+# 或初始化后直接启动
+bash scripts/bootstrap_new_machine.sh --run
+```
+脚本会自动：
+- 检查 Docker / Docker Compose
+- 初始化 `weibo_data/raw|curated|logs` 目录
+- 自动生成 `config.yaml`（若不存在）
+- 预构建镜像并给出下一步指令
+
 ### 3. 查看日志
 ```bash
 docker compose logs -f weibo-crawler
