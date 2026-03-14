@@ -84,11 +84,21 @@ class OCRProcessor:
                                             lines.append(txt)
                                             scores.append(sc)
 
-                # 3.x: 可能返回对象列表，含 rec_texts / rec_scores
+                # 3.x: 可能返回对象列表或 dict，字段可能是 rec_texts / rec_scores / rec_text
                 if not lines and isinstance(raw, list):
                     for obj in raw:
                         rec_texts = getattr(obj, "rec_texts", None)
                         rec_scores = getattr(obj, "rec_scores", None)
+
+                        if isinstance(obj, dict):
+                            rec_texts = rec_texts or obj.get("rec_texts") or obj.get("rec_text")
+                            rec_scores = rec_scores or obj.get("rec_scores") or obj.get("rec_score")
+
+                        if rec_texts and not isinstance(rec_texts, list):
+                            rec_texts = [rec_texts]
+                        if rec_scores and not isinstance(rec_scores, list):
+                            rec_scores = [rec_scores]
+
                         if rec_texts:
                             for i, txt in enumerate(rec_texts):
                                 txt = str(txt).strip()
@@ -98,11 +108,13 @@ class OCRProcessor:
                                         scores.append(float(rec_scores[i]))
 
                 avg = (sum(scores) / len(scores)) if scores else 0.0
+                final_text = "\n".join(lines).strip()
                 return {
-                    "text": "\n".join(lines).strip(),
+                    "text": final_text,
                     "confidence": round(avg, 4),
                     "engine": "paddle",
-                    "ok": True,
+                    "ok": bool(final_text),
+                    "error": None if final_text else "no_text_extracted",
                 }
             except Exception as e:
                 return {"text": "", "confidence": 0.0, "engine": "paddle", "ok": False, "error": str(e)}
