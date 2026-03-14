@@ -1,0 +1,5 @@
+services:
+  weibo-crawler:
+    gpus: all
+    environment:
+      - CUDA_VISIBLE_DEVICES=0

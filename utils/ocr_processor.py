@@ -30,9 +30,12 @@ class OCRProcessor:
             try:
                 from paddleocr import PaddleOCR  # type: ignore
 
-                # PaddleOCR 3.x 参数已变更，不再接受 use_gpu。
-                # 这里使用默认设备策略（CPU），保持兼容。
-                self._paddle = PaddleOCR(lang="ch")
+                # 优先使用 3.x 的 device 参数；失败时回退到旧版 use_gpu 参数。
+                try:
+                    device = "gpu:0" if cfg.use_gpu else "cpu"
+                    self._paddle = PaddleOCR(lang="ch", device=device)
+                except TypeError:
+                    self._paddle = PaddleOCR(lang="ch", use_gpu=cfg.use_gpu)
             except Exception as e:
                 raise RuntimeError(
                     f"OCR engine=paddle 初始化失败，请检查 paddleocr 版本/环境：{e}"

@@ -49,6 +49,7 @@ cp config.example.yaml config.yaml
 - `download.images`：是否下载图片
 - `ocr.enabled`：是否开启 OCR（开启后写入 `raw/ocr.jsonl`）
 - `ocr.engine`：推荐 `paddle`（默认用于 Docker/高性能机器）
+- `ocr.use_gpu`：Paddle 模式下可选开启 GPU（需宿主机支持 NVIDIA）
 
 ### 3. 执行（单次）
 ```bash
@@ -75,9 +76,14 @@ python main.py --config config.yaml --mode daemon
 - 优点：效果更强，适合后续结构化提取
 - 缺点：首次下载模型较慢
 - 配置：`config.yaml` 中设置 `ocr.engine: "paddle"`
-- 启动：
+- CPU 启动：
 ```bash
 docker compose up -d --build
+```
+- GPU 启动（可选）：
+```bash
+# config.yaml 里设置 ocr.use_gpu: true
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
 ```
 
 #### 方案 B：Tesseract（稳定、轻量）
