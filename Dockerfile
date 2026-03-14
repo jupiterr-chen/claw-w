@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=m.daocloud.io/docker.io/python:3.11-slim
+ARG BASE_IMAGE=m.daocloud.io/docker.io/python:3.11-slim-bookworm
 FROM ${BASE_IMAGE}
 
 WORKDIR /app
