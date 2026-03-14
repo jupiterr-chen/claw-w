@@ -48,6 +48,7 @@ cp config.example.yaml config.yaml
 - `targets.since_date`：可选，`YYYY-MM-DD`
 - `download.images`：是否下载图片
 - `ocr.enabled`：是否开启 OCR（开启后写入 `raw/ocr.jsonl`）
+- `ocr.engine`：推荐 `paddle`（默认用于 Docker/高性能机器）
 
 ### 3. 执行（单次）
 ```bash

@@ -5,4 +5,8 @@ loguru==0.7.2
 tenacity==9.0.0
 pytest==8.3.5
 Pillow==11.1.0
+# OCR engines
+paddleocr==3.4.0
+paddlepaddle==3.0.0
+# Optional fallback
 pytesseract==0.3.13

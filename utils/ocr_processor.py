@@ -30,15 +30,12 @@ class OCRProcessor:
             try:
                 from paddleocr import PaddleOCR  # type: ignore
 
-                self._paddle = PaddleOCR(
-                    use_angle_cls=True,
-                    lang="ch",
-                    use_gpu=cfg.use_gpu,
-                    show_log=False,
-                )
+                # PaddleOCR 3.x 参数已变更，不再接受 use_gpu。
+                # 这里使用默认设备策略（CPU），保持兼容。
+                self._paddle = PaddleOCR(lang="ch")
             except Exception as e:
                 raise RuntimeError(
-                    "OCR engine=paddle 但未安装 paddleocr 或环境不满足，请先安装后重试"
+                    f"OCR engine=paddle 初始化失败，请检查 paddleocr 版本/环境：{e}"
                 ) from e
 
     def extract(self, image_path: str | Path) -> Dict[str, Any]:
@@ -58,15 +55,45 @@ class OCRProcessor:
 
         if self.cfg.engine == "paddle":
             try:
-                result = self._paddle.ocr(p, cls=True) if self._paddle else None
+                if not self._paddle:
+                    return {"text": "", "confidence": 0.0, "engine": "paddle", "ok": False, "error": "paddle not initialized"}
+
+                # 兼容 paddleocr 2.x / 3.x
+                try:
+                    raw = self._paddle.ocr(p, cls=True)
+                except TypeError:
+                    raw = self._paddle.predict(p)
+
                 lines = []
                 scores = []
-                for block in result or []:
-                    for item in block or []:
-                        txt = item[1][0]
-                        score = float(item[1][1])
-                        lines.append(txt)
-                        scores.append(score)
+
+                # 2.x: [[ [box, [text, score]], ... ]]
+                if isinstance(raw, list):
+                    for block in raw:
+                        if isinstance(block, list):
+                            for item in block:
+                                if isinstance(item, (list, tuple)) and len(item) >= 2:
+                                    rec = item[1]
+                                    if isinstance(rec, (list, tuple)) and len(rec) >= 2:
+                                        txt = str(rec[0]).strip()
+                                        sc = float(rec[1])
+                                        if txt:
+                                            lines.append(txt)
+                                            scores.append(sc)
+
+                # 3.x: 可能返回对象列表，含 rec_texts / rec_scores
+                if not lines and isinstance(raw, list):
+                    for obj in raw:
+                        rec_texts = getattr(obj, "rec_texts", None)
+                        rec_scores = getattr(obj, "rec_scores", None)
+                        if rec_texts:
+                            for i, txt in enumerate(rec_texts):
+                                txt = str(txt).strip()
+                                if txt:
+                                    lines.append(txt)
+                                    if rec_scores and i < len(rec_scores):
+                                        scores.append(float(rec_scores[i]))
+
                 avg = (sum(scores) / len(scores)) if scores else 0.0
                 return {
                     "text": "\n".join(lines).strip(),
