@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from collections import defaultdict
 from datetime import datetime
@@ -32,9 +33,13 @@ def apply_runtime_overrides(cfg: dict, base_dir: str | None = None):
     if not base_dir:
         return cfg
 
-    cfg["storage"]["base_dir"] = base_dir
+    cfg.setdefault("storage", {})["base_dir"] = base_dir
     cfg["storage"]["db_path"] = str(Path(base_dir) / "history.db")
-    cfg["logging"]["file"] = str(Path(base_dir) / "logs" / "weibo_crawler.log")
+    cfg.setdefault("logging", {})["file"] = str(Path(base_dir) / "logs" / "weibo_crawler.log")
+    
+    if "ocr" in cfg and cfg["ocr"].get("enabled", False):
+        cfg["ocr"]["output_jsonl"] = str(Path(base_dir) / "ocr_results.jsonl")
+        
     return cfg
 
 
@@ -53,7 +58,10 @@ def run_once(cfg: dict):
         timeout=cfg["network"].get("timeout", 10),
         max_retries=cfg["network"].get("max_retries", 3),
     )
-    storage = StorageManager(cfg["storage"]["base_dir"])
+    storage = StorageManager(
+        cfg["storage"]["base_dir"],
+        organize_by_uid=cfg["storage"].get("organize_by_uid", False),
+    )
     tracker = HistoryTracker(cfg["storage"]["db_path"])
 
     ocr_cfg = cfg.get("ocr", {})
@@ -86,7 +94,8 @@ def run_once(cfg: dict):
                 cards = crawler.parse_cards(data, since_date=since_date, include_retweets=include_retweets)
             except Exception as e:
                 logger.error(f"拉取失败 uid={uid} page={page}: {e}")
-                break
+                # 网络异常可能只是单页问题，这里继续下一页，而不是直接跳过用户
+                continue
 
             if not cards:
                 logger.info(f"uid={uid} page={page} 无可处理微博，结束该用户抓取")
@@ -96,6 +105,8 @@ def run_once(cfg: dict):
             for post in cards:
                 if tracker.is_processed(post["id"]):
                     consecutive_processed += 1
+                    if consecutive_processed >= stop_threshold:
+                        break
                     continue
 
                 consecutive_processed = 0
@@ -147,16 +158,26 @@ def run_once(cfg: dict):
                 break
 
     for date_key, st in day_stats.items():
-        date_dir = os.path.join(cfg["storage"]["base_dir"], date_key)
+        date_dir = Path(cfg["storage"]["base_dir"]) / date_key
+        summary_file = date_dir / "summary.json"
+        
+        existing_summary = {}
+        if summary_file.exists():
+            try:
+                with open(summary_file, "r", encoding="utf-8") as f:
+                    existing_summary = json.load(f)
+            except Exception:
+                pass
+
         summary = {
             "date": date_key,
-            "posts": st["posts"],
-            "images": st["images"],
-            "ocr_images": st["ocr_images"],
-            "uids": sorted(list(st["uids"])),
+            "posts": st["posts"] + existing_summary.get("posts", 0),
+            "images": st["images"] + existing_summary.get("images", 0),
+            "ocr_images": st["ocr_images"] + existing_summary.get("ocr_images", 0),
+            "uids": sorted(list(set(st["uids"]) | set(existing_summary.get("uids", [])))),
             "generated_at": datetime.now().isoformat(),
         }
-        storage.write_summary(date_dir, summary)
+        storage.write_summary(str(date_dir), summary)
 
     logger.info("本轮任务完成")
 
@@ -178,7 +199,9 @@ def main():
 
     run_at = cfg.get("task", {}).get("run_at", "00:05")
     schedule.every().day.at(run_at).do(lambda: run_once(cfg))
-    print(f"[daemon] 已启动，计划每天 {run_at} 执行")
+    print(f"[daemon] 已启动，计划每天 {run_at} 执行。先执行一次初始化抓取...")
+    run_once(cfg)
+    
     while True:
         schedule.run_pending()
         time.sleep(30)

@@ -7,7 +7,7 @@
 - 自动处理正文文本（含 HTML 清洗）
 - 自动提取并下载原图（可关闭）
 - 支持本地 OCR（tesseract / paddle，可选）
-- 按日期归档：`YYYY-MM-DD/Post_HHMMSS_ShortID/`
+- 按日期归档（可按 UID 分组）：`YYYY-MM-DD/UID_xxx/Post_HHMMSS_ShortID/`
 - 每日写入 `summary.json`
 - 支持本机运行与 Docker 运行
 
@@ -32,6 +32,8 @@ cd claw-w
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+# 若开启 tesseract OCR，需要本机安装：
+brew install tesseract tesseract-lang
 ```
 
 ### 2. 配置
@@ -43,6 +45,8 @@ cp config.example.yaml config.yaml
 - `targets.user_ids`：目标 UID 列表
 - `targets.since_date`：可选，`YYYY-MM-DD`
 - `download.images`：是否下载图片
+- `storage.organize_by_uid`：是否按 UID 分组目录（推荐 `true`）
+- `ocr.enabled`：是否开启 OCR（开启后会写入 `weibo_data/ocr/ocr_results.jsonl`）
 
 ### 3. 执行（单次）
 ```bash
@@ -93,9 +97,13 @@ pytest -q
 每条微博一个目录：
 - `content.txt`：正文
 - `img_1.jpg`, `img_2.jpg` ...：配图
+- `ocr.txt`：该微博图片 OCR 合并文本（仅 OCR 开启且有识别内容时生成）
 
 每天目录下：
 - `summary.json`：当天抓取统计
+
+全局 OCR 汇总：
+- `weibo_data/ocr/ocr_results.jsonl`：每张图片一条识别记录（含 ok/error）
 
 ## 5) Git 远端
 项目远端仓库：

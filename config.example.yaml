@@ -15,6 +15,8 @@ storage:
   # 默认存储目录（可通过 CLI --base-dir 临时覆盖）
   base_dir: "./weibo_data"
   db_path: "./weibo_data/history.db"
+  # true 时目录变为 YYYY-MM-DD/UID_xxx/Post_xxx
+  organize_by_uid: true
 
 network:
   delay_min: 3

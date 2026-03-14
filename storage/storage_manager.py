@@ -14,13 +14,16 @@ import requests
 class StorageManager:
     """文件持久化管理器。"""
 
-    def __init__(self, base_dir: str):
+    def __init__(self, base_dir: str, organize_by_uid: bool = False):
         self.base_dir = Path(base_dir)
+        self.organize_by_uid = organize_by_uid
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
-    def _date_dir(self, created_ts: int) -> Path:
+    def _date_dir(self, created_ts: int, user_id: str | None = None) -> Path:
         d = datetime.fromtimestamp(created_ts).strftime("%Y-%m-%d")
         path = self.base_dir / d
+        if self.organize_by_uid and user_id:
+            path = path / f"UID_{user_id}"
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -33,7 +36,8 @@ class StorageManager:
         created_ts = int(post["created_ts"])
         short_id = str(post["id"])[-8:]
 
-        date_dir = self._date_dir(created_ts)
+        user_id = str(post.get("user_id", "")).strip()
+        date_dir = self._date_dir(created_ts, user_id=user_id)
         post_dir = date_dir / self._post_dir_name(created_ts, short_id)
         post_dir.mkdir(parents=True, exist_ok=True)
 
