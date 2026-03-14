@@ -116,6 +116,7 @@ bash scripts/bootstrap_new_machine.sh --run
 - 检查 Docker / Docker Compose
 - 初始化 `weibo_data/raw|curated|logs` 目录
 - 自动生成 `config.yaml`（若不存在）
+- WSL 环境下自动清理 `localhost/127.0.0.1` 代理变量（避免 NAT 代理问题）
 - 预构建镜像并给出下一步指令
 
 ### 3. 查看日志

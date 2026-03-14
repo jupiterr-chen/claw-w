@@ -14,6 +14,33 @@ if [[ "${1:-}" == "--run" ]]; then
   RUN_AFTER_INIT=true
 fi
 
+is_wsl=false
+if grep -qiE "microsoft|wsl" /proc/version 2>/dev/null; then
+  is_wsl=true
+fi
+
+# WSL NAT 下 localhost 代理会导致网络请求异常，自动清理本次会话代理变量。
+clear_proxy_if_localhost() {
+  local hit=false
+  for k in http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy; do
+    local v="${!k:-}"
+    if [[ -n "$v" && ("$v" == *"127.0.0.1"* || "$v" == *"localhost"*) ]]; then
+      unset "$k" || true
+      hit=true
+    fi
+  done
+
+  if [[ "$hit" == true ]]; then
+    echo "⚠️ 检测到 localhost 代理，已为当前脚本临时清理代理环境变量。"
+    if [[ "$is_wsl" == true ]]; then
+      echo "   提示：WSL NAT 模式不支持 localhost 代理镜像。"
+      echo "   可长期修复：在 Windows ~/.wslconfig 中设置 networkingMode=mirrored, autoProxy=true，然后执行 wsl --shutdown。"
+    fi
+  fi
+}
+
+clear_proxy_if_localhost
+
 echo "[1/6] 检查 Docker / Compose"
 command -v docker >/dev/null 2>&1 || { echo "❌ docker 未安装"; exit 1; }
 docker compose version >/dev/null 2>&1 || { echo "❌ docker compose 不可用"; exit 1; }
