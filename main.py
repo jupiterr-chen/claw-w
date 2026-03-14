@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
-import os
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -25,22 +23,30 @@ def load_config(path: str) -> dict:
 
 
 def apply_runtime_overrides(cfg: dict, base_dir: str | None = None):
-    """运行时参数覆盖。
-
-    - 允许通过 CLI 覆盖 storage.base_dir，便于后续迁移到大磁盘路径。
-    - 覆盖后，db_path / logging.file 默认同步跟随到新 base_dir。
-    """
     if not base_dir:
         return cfg
 
     cfg.setdefault("storage", {})["base_dir"] = base_dir
     cfg["storage"]["db_path"] = str(Path(base_dir) / "history.db")
     cfg.setdefault("logging", {})["file"] = str(Path(base_dir) / "logs" / "weibo_crawler.log")
-    
-    if "ocr" in cfg and cfg["ocr"].get("enabled", False):
-        cfg["ocr"]["output_jsonl"] = str(Path(base_dir) / "ocr_results.jsonl")
-        
+
+    if "ocr" in cfg:
+        cfg["ocr"]["output_jsonl"] = "raw/ocr.jsonl"
+
     return cfg
+
+
+def _infer_signal_asset(text: str) -> str:
+    t = text.lower()
+    if "btc" in t or "比特币" in t:
+        return "BTC"
+    if "eth" in t or "以太坊" in t:
+        return "ETH"
+    if "纳指" in t or "美股" in t or "spx" in t:
+        return "US_EQ"
+    if "美元" in t or "美联储" in t:
+        return "MACRO"
+    return "UNKNOWN"
 
 
 def run_once(cfg: dict):
@@ -58,10 +64,7 @@ def run_once(cfg: dict):
         timeout=cfg["network"].get("timeout", 10),
         max_retries=cfg["network"].get("max_retries", 3),
     )
-    storage = StorageManager(
-        cfg["storage"]["base_dir"],
-        organize_by_uid=cfg["storage"].get("organize_by_uid", False),
-    )
+    storage = StorageManager(cfg["storage"]["base_dir"])
     tracker = HistoryTracker(cfg["storage"]["db_path"])
 
     ocr_cfg = cfg.get("ocr", {})
@@ -73,7 +76,8 @@ def run_once(cfg: dict):
             use_gpu=ocr_cfg.get("use_gpu", False),
         )
     )
-    ocr_jsonl = ocr_cfg.get("output_jsonl", "ocr/ocr_results.jsonl")
+    ocr_jsonl = ocr_cfg.get("output_jsonl", "raw/ocr.jsonl")
+    signals_jsonl = "curated/signals.jsonl"
 
     since_date = cfg["targets"].get("since_date")
     include_retweets = cfg["targets"].get("include_retweets", False)
@@ -94,7 +98,6 @@ def run_once(cfg: dict):
                 cards = crawler.parse_cards(data, since_date=since_date, include_retweets=include_retweets)
             except Exception as e:
                 logger.error(f"拉取失败 uid={uid} page={page}: {e}")
-                # 网络异常可能只是单页问题，这里继续下一页，而不是直接跳过用户
                 continue
 
             if not cards:
@@ -119,11 +122,10 @@ def run_once(cfg: dict):
                 day_stats[date_key]["images"] += saved["images_saved"]
                 day_stats[date_key]["uids"].add(uid)
 
-                # 本地 OCR：对当前微博目录图片做解析
+                ocr_texts = []
                 if ocr_cfg.get("enabled", False) and saved["images_saved"] > 0:
-                    post_dir = Path(saved["post_dir"])
-                    ocr_texts = []
-                    for img in sorted(post_dir.glob("img_*.jpg")):
+                    for image_path in saved["image_paths"]:
+                        img = Path(image_path)
                         result = ocr.extract(img)
                         if result.get("ok"):
                             day_stats[date_key]["ocr_images"] += 1
@@ -147,9 +149,26 @@ def run_once(cfg: dict):
                         )
 
                     if ocr_texts:
-                        (post_dir / "ocr.txt").write_text("\n\n".join(ocr_texts), encoding="utf-8")
+                        (Path(saved["image_dir"]) / "ocr.txt").write_text("\n\n".join(ocr_texts), encoding="utf-8")
 
-                logger.info(f"post={saved['post_id']} images={saved['images_saved']} saved={saved['post_dir']}")
+                merged_text = (post.get("text", "") + "\n" + "\n".join(ocr_texts)).strip()
+                storage.append_jsonl(
+                    signals_jsonl,
+                    {
+                        "source_post_id": saved["post_id"],
+                        "author": uid,
+                        "published_at": post.get("created_at"),
+                        "asset": _infer_signal_asset(merged_text),
+                        "stance": "neutral",
+                        "horizon": "unknown",
+                        "confidence": "low",
+                        "evidence_text": (merged_text[:280] if merged_text else post.get("text", "")[:280]),
+                        "tags": [],
+                        "ocr_used": bool(ocr_texts),
+                    },
+                )
+
+                logger.info(f"post={saved['post_id']} images={saved['images_saved']} saved={saved['image_dir']}")
 
             logger.info(f"uid={uid} page={page} 新增 {new_count} 条")
 
@@ -157,27 +176,25 @@ def run_once(cfg: dict):
                 logger.info(f"uid={uid} 连续遇到 {consecutive_processed} 条已下载数据，触发提前终止策略。")
                 break
 
-    for date_key, st in day_stats.items():
-        date_dir = Path(cfg["storage"]["base_dir"]) / date_key
-        summary_file = date_dir / "summary.json"
-        
-        existing_summary = {}
-        if summary_file.exists():
-            try:
-                with open(summary_file, "r", encoding="utf-8") as f:
-                    existing_summary = json.load(f)
-            except Exception:
-                pass
+    # 生成 curated/daily_summary.md（本轮）
+    lines = ["# Daily Summary (This Run)", ""]
+    for date_key in sorted(day_stats.keys()):
+        st = day_stats[date_key]
+        lines.extend(
+            [
+                f"## {date_key}",
+                f"- posts: {st['posts']}",
+                f"- images: {st['images']}",
+                f"- ocr_images_ok: {st['ocr_images']}",
+                f"- uids: {', '.join(sorted(st['uids']))}",
+                "",
+            ]
+        )
+    storage.write_daily_summary(datetime.now().strftime("%Y-%m-%d"), lines)
 
-        summary = {
-            "date": date_key,
-            "posts": st["posts"] + existing_summary.get("posts", 0),
-            "images": st["images"] + existing_summary.get("images", 0),
-            "ocr_images": st["ocr_images"] + existing_summary.get("ocr_images", 0),
-            "uids": sorted(list(set(st["uids"]) | set(existing_summary.get("uids", [])))),
-            "generated_at": datetime.now().isoformat(),
-        }
-        storage.write_summary(str(date_dir), summary)
+    weekly_path = Path(cfg["storage"]["base_dir"]) / "curated" / "weekly_summary.md"
+    if not weekly_path.exists():
+        weekly_path.write_text("# Weekly Summary\n\n(待生成)\n", encoding="utf-8")
 
     logger.info("本轮任务完成")
 
@@ -201,7 +218,7 @@ def main():
     schedule.every().day.at(run_at).do(lambda: run_once(cfg))
     print(f"[daemon] 已启动，计划每天 {run_at} 执行。先执行一次初始化抓取...")
     run_once(cfg)
-    
+
     while True:
         schedule.run_pending()
         time.sleep(30)

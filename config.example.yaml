@@ -15,8 +15,6 @@ storage:
   # 默认存储目录（可通过 CLI --base-dir 临时覆盖）
   base_dir: "./weibo_data"
   db_path: "./weibo_data/history.db"
-  # true 时目录变为 YYYY-MM-DD/UID_xxx/Post_xxx
-  organize_by_uid: true
 
 network:
   delay_min: 3
@@ -36,8 +34,8 @@ ocr:
   engine: "tesseract"
   lang: "chi_sim+eng"
   use_gpu: false
-  # 相对 base_dir 的 JSONL 输出
-  output_jsonl: "ocr/ocr_results.jsonl"
+  # 相对 base_dir 的 JSONL 输出（Raw 层）
+  output_jsonl: "raw/ocr.jsonl"
 
 task:
   run_mode: "once"   # once|daemon

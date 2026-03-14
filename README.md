@@ -7,21 +7,23 @@
 - 自动处理正文文本（含 HTML 清洗）
 - 自动提取并下载原图（可关闭）
 - 支持本地 OCR（tesseract / paddle，可选）
-- 按日期归档（可按 UID 分组）：`YYYY-MM-DD/UID_xxx/Post_HHMMSS_ShortID/`
-- 每日写入 `summary.json`
+- 输出 **Raw + Curated 两层数据结构**，便于后续分析
 - 支持本机运行与 Docker 运行
 
-## 目录结构
+## 数据目录（两层存储）
 ```text
-claw-w/
-  crawler/
-  storage/
-  tracking/
-  utils/
-  tests/
-  weibo_data/
-  main.py
-  config.example.yaml
+weibo_data/
+  raw/
+    posts.jsonl          # 每条微博一行原始记录
+    ocr.jsonl            # 每张图片 OCR 一行记录
+    images/
+      <post_id>/img_1.jpg ...
+  curated/
+    signals.jsonl        # 结构化信号（可聚合）
+    daily_summary.md     # 每日汇总（本轮）
+    weekly_summary.md    # 周汇总模板
+  history.db
+  logs/
 ```
 
 ## 1) 本机使用步骤（macOS Intel）
@@ -41,12 +43,11 @@ brew install tesseract tesseract-lang
 cp config.example.yaml config.yaml
 ```
 编辑 `config.yaml`：
-- `auth.cookie`：填入微博小号 Cookie
+- `auth.cookie`：微博登录 Cookie
 - `targets.user_ids`：目标 UID 列表
 - `targets.since_date`：可选，`YYYY-MM-DD`
 - `download.images`：是否下载图片
-- `storage.organize_by_uid`：是否按 UID 分组目录（推荐 `true`）
-- `ocr.enabled`：是否开启 OCR（开启后会写入 `weibo_data/ocr/ocr_results.jsonl`）
+- `ocr.enabled`：是否开启 OCR（开启后写入 `raw/ocr.jsonl`）
 
 ### 3. 执行（单次）
 ```bash
@@ -57,7 +58,7 @@ python main.py --config config.yaml --mode once
 ```bash
 python main.py --config config.yaml --mode once --base-dir /path/to/weibo_data
 ```
-说明：`--base-dir` 会同时覆盖默认的 `history.db` 和日志文件路径到该目录下。
+说明：`--base-dir` 会同时覆盖 `history.db` 与日志路径。
 
 ### 4. 守护模式（每天定时）
 ```bash
@@ -93,19 +94,7 @@ docker compose down
 pytest -q
 ```
 
-## 4) 数据输出格式
-每条微博一个目录：
-- `content.txt`：正文
-- `img_1.jpg`, `img_2.jpg` ...：配图
-- `ocr.txt`：该微博图片 OCR 合并文本（仅 OCR 开启且有识别内容时生成）
-
-每天目录下：
-- `summary.json`：当天抓取统计
-
-全局 OCR 汇总：
-- `weibo_data/ocr/ocr_results.jsonl`：每张图片一条识别记录（含 ok/error）
-
-## 5) Git 远端
+## 4) Git 远端
 项目远端仓库：
 ```text
 git@github.com:jupiterr-chen/claw-w.git
