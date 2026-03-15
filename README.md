@@ -169,12 +169,34 @@ docker compose logs -f weibo-crawler
 docker compose down
 ```
 
-## 3) 测试
+## 3) 历史数据迁移（旧 post_id -> 新格式）
+如果你之前已经抓过数据，目录/DB 不会自动重命名。可用脚本迁移：
+
+```bash
+# 先预览（不落盘）
+python scripts/migrate_post_ids.py --base-dir ./weibo_data
+
+# 确认后执行
+python scripts/migrate_post_ids.py --base-dir ./weibo_data --apply
+```
+
+Docker 内执行：
+```bash
+# dry-run
+docker compose run --rm weibo-crawler \
+  python scripts/migrate_post_ids.py --base-dir ./weibo_data
+
+# apply
+docker compose run --rm weibo-crawler \
+  python scripts/migrate_post_ids.py --base-dir ./weibo_data --apply
+```
+
+## 4) 测试
 ```bash
 pytest -q
 ```
 
-## 4) Git 远端
+## 5) Git 远端
 项目远端仓库：
 ```text
 git@github.com:jupiterr-chen/claw-w.git
