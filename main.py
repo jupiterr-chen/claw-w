@@ -93,6 +93,7 @@ def run_once(cfg: dict, reprocess_ocr: bool = False):
     include_retweets = cfg["targets"].get("include_retweets", False)
     dl_images = cfg["download"].get("images", True)
     img_timeout = cfg["download"].get("image_timeout", 15)
+    reprocess_download_images = ocr_cfg.get("reprocess_download_images", True)
 
     day_stats: Dict[str, Dict] = defaultdict(lambda: {"posts": 0, "images": 0, "uids": set(), "ocr_images": 0})
 
@@ -128,12 +129,17 @@ def run_once(cfg: dict, reprocess_ocr: bool = False):
                     continue
                 saved = storage.save_post(
                     post,
-                    download_images=(True if reprocess_ocr else dl_images),
+                    download_images=(reprocess_download_images if reprocess_ocr else dl_images),
                     image_timeout=img_timeout,
                     append_post_row=(not already_processed),
                 )
                 if not already_processed:
-                    tracker.mark_processed(post["id"], uid, int(post["created_ts"]))
+                    tracker.mark_processed(
+                        saved["post_id"],
+                        uid,
+                        int(post["created_ts"]),
+                        source_post_id=post["id"],
+                    )
                     new_count += 1
 
                 date_key = datetime.fromtimestamp(int(post["created_ts"])).strftime("%Y-%m-%d")
@@ -142,7 +148,7 @@ def run_once(cfg: dict, reprocess_ocr: bool = False):
                 day_stats[date_key]["uids"].add(uid)
 
                 ocr_texts = []
-                if ocr_cfg.get("enabled", False) and saved["images_saved"] > 0:
+                if ocr_cfg.get("enabled", False) and saved["image_paths"]:
                     for image_path in saved["image_paths"]:
                         img = Path(image_path)
                         result = ocr.extract(img)
@@ -156,6 +162,7 @@ def run_once(cfg: dict, reprocess_ocr: bool = False):
                             ocr_jsonl,
                             {
                                 "post_id": saved["post_id"],
+                                "source_post_id": saved.get("source_post_id"),
                                 "image": str(img),
                                 "image_sha256": storage.file_sha256(img),
                                 "engine": result.get("engine"),
@@ -175,7 +182,8 @@ def run_once(cfg: dict, reprocess_ocr: bool = False):
                     storage.append_jsonl(
                         signals_jsonl,
                         {
-                            "source_post_id": saved["post_id"],
+                            "source_post_id": saved.get("source_post_id", saved["post_id"]),
+                            "local_post_id": saved["post_id"],
                             "author": uid,
                             "published_at": post.get("created_at"),
                             "asset": _infer_signal_asset(merged_text),
@@ -225,20 +233,35 @@ def main():
     parser.add_argument("--mode", choices=["once", "daemon"], default=None)
     parser.add_argument("--base-dir", default=None, help="覆盖 storage.base_dir（例如 /mnt/weibo_data）")
     parser.add_argument("--reprocess-ocr", action="store_true", help="对已处理微博强制重下图片并重跑 OCR")
+    parser.add_argument(
+        "--run-full-ocr-after",
+        action="store_true",
+        help="本轮抓取完成后再执行一次全量 OCR（等价于追加一次 --reprocess-ocr）",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     cfg = apply_runtime_overrides(cfg, base_dir=args.base_dir)
     mode = args.mode or cfg.get("task", {}).get("run_mode", "once")
+    run_full_ocr_after = args.run_full_ocr_after or cfg.get("task", {}).get("run_full_ocr_after", False)
 
     if mode == "once":
         run_once(cfg, reprocess_ocr=args.reprocess_ocr)
+        if run_full_ocr_after and not args.reprocess_ocr:
+            print("[once] 抓取完成，开始执行全量 OCR 重处理...")
+            run_once(cfg, reprocess_ocr=True)
         return
 
+    def _run_cycle():
+        run_once(cfg, reprocess_ocr=False)
+        if run_full_ocr_after:
+            print("[daemon] 本轮抓取完成，开始执行全量 OCR 重处理...")
+            run_once(cfg, reprocess_ocr=True)
+
     run_at = cfg.get("task", {}).get("run_at", "00:05")
-    schedule.every().day.at(run_at).do(lambda: run_once(cfg, reprocess_ocr=False))
+    schedule.every().day.at(run_at).do(_run_cycle)
     print(f"[daemon] 已启动，计划每天 {run_at} 执行。先执行一次初始化抓取...")
-    run_once(cfg, reprocess_ocr=False)
+    _run_cycle()
 
     while True:
         schedule.run_pending()

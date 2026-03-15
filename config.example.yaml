@@ -34,9 +34,12 @@ ocr:
   engine: "tesseract"
   lang: "chi_sim+eng"
   use_gpu: false
+  # reprocess-ocr 模式下是否重新下载图片；false=仅对本地已下载图片做 OCR
+  reprocess_download_images: true
   # 相对 base_dir 的 JSONL 输出（Raw 层）
   output_jsonl: "raw/ocr.jsonl"
 
 task:
   run_mode: "once"   # once|daemon
   run_at: "00:05"    # daemon 模式下每天执行时间
+  run_full_ocr_after: false  # 每轮抓取完成后追加一次全量 OCR（reprocess-ocr）
