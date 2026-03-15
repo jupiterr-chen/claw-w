@@ -50,6 +50,7 @@ cp config.example.yaml config.yaml
 - `ocr.enabled`：是否开启 OCR（开启后写入 `raw/ocr.jsonl`）
 - `ocr.engine`：推荐 `paddle`（默认用于 Docker/高性能机器）
 - `ocr.use_gpu`：Paddle 模式下可选开启 GPU（需宿主机支持 NVIDIA）
+- `ocr.reprocess_download_images`：`reprocess-ocr` 模式下是否重新下载图片。设为 `false` 可实现“第二次只做 OCR、不下载”
 
 ### 3. 执行（单次）
 ```bash
@@ -134,12 +135,36 @@ bash scripts/bootstrap_new_machine.sh --run
 - WSL 环境下自动清理 `localhost/127.0.0.1` 代理变量（避免 NAT 代理问题）
 - 预构建镜像并给出下一步指令
 
-### 3. 查看日志
+### 3. Docker 中手动执行一次（推荐用于首轮抓取）
+```bash
+docker compose run --rm weibo-crawler \
+  python main.py --config config.yaml --mode once
+```
+
+### 3.1 第二次仅 OCR（不下载图片）
+先在 `config.yaml` 设置：
+```yaml
+ocr:
+  enabled: true
+  reprocess_download_images: false
+```
+然后执行：
+```bash
+docker compose run --rm weibo-crawler \
+  python main.py --config config.yaml --mode once --reprocess-ocr
+```
+
+> 说明：此模式会复用 `weibo_data/raw/images/<本地post_id>/` 的已有图片，只做 OCR。
+>
+> 若使用 tesseract 专用编排，请把命令前缀替换为：
+> `docker compose -f docker-compose.tesseract.yml run --rm weibo-crawler`
+
+### 4. 查看日志
 ```bash
 docker compose logs -f weibo-crawler
 ```
 
-### 4. 停止
+### 5. 停止
 ```bash
 docker compose down
 ```
