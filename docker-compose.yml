@@ -8,7 +8,13 @@ services:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-}
     container_name: weibo-crawler
     restart: unless-stopped
+    environment:
+      HF_ENDPOINT: ${HF_ENDPOINT:-}
+      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./weibo_data:/app/weibo_data
+      - ./model_cache/paddleocr:/root/.paddleocr
+      - ./model_cache/paddlex:/root/.paddlex
+      - ./model_cache/huggingface:/root/.cache/huggingface
     command: ["python", "main.py", "--config", "config.yaml", "--mode", "daemon"]
