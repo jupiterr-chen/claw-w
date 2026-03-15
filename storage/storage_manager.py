@@ -4,9 +4,8 @@ import hashlib
 import json
 from pathlib import Path
 from typing import Any, Dict, List
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import requests
+from storage.download_utils import download_batch
 
 
 class StorageManager:
@@ -39,16 +38,10 @@ class StorageManager:
         image_paths: List[str] = []
 
         if download_images and pics:
-            with ThreadPoolExecutor(max_workers=3) as executor:
-                future_to_path = {
-                    executor.submit(self._download_image, url, post_image_dir / f"img_{i}.jpg", image_timeout):
-                    (url, post_image_dir / f"img_{i}.jpg") for i, url in enumerate(pics, start=1)
-                }
-                for future in as_completed(future_to_path):
-                    _, out_path = future_to_path[future]
-                    if future.result():
-                        saved += 1
-                        image_paths.append(str(out_path))
+            tasks = [(url, post_image_dir / f"img_{i}.jpg") for i, url in enumerate(pics, start=1)]
+            dl_result = download_batch(tasks, max_workers=3, timeout=image_timeout)
+            saved = dl_result["success"]
+            image_paths = sorted([d["path"] for d in dl_result["details"] if d["ok"]])
 
         # raw/posts.jsonl：保真原始微博数据 + 本地落盘路径
         if append_post_row:
@@ -92,15 +85,3 @@ class StorageManager:
                 h.update(chunk)
         return h.hexdigest()
 
-    @staticmethod
-    def _download_image(url: str, path: Path, timeout: int = 15) -> bool:
-        try:
-            r = requests.get(url, timeout=timeout, stream=True)
-            r.raise_for_status()
-            with open(path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-            return True
-        except Exception:
-            return False

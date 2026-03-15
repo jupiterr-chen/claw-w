@@ -49,6 +49,16 @@ def _infer_signal_asset(text: str) -> str:
     return "UNKNOWN"
 
 
+def _next_consecutive_processed(
+    consecutive_processed: int,
+    already_processed: bool,
+    reprocess_ocr: bool,
+) -> int:
+    if reprocess_ocr:
+        return 0
+    return consecutive_processed + 1 if already_processed else 0
+
+
 def run_once(cfg: dict, reprocess_ocr: bool = False):
     logger = setup_logger(
         cfg["logging"]["file"],
@@ -107,14 +117,15 @@ def run_once(cfg: dict, reprocess_ocr: bool = False):
             new_count = 0
             for post in cards:
                 already_processed = tracker.is_processed(post["id"])
+                consecutive_processed = _next_consecutive_processed(
+                    consecutive_processed=consecutive_processed,
+                    already_processed=already_processed,
+                    reprocess_ocr=reprocess_ocr,
+                )
                 if already_processed and not reprocess_ocr:
-                    consecutive_processed += 1
                     if consecutive_processed >= stop_threshold:
                         break
                     continue
-
-                # reprocess_ocr 模式下，不触发“连续已处理提前终止”
-                consecutive_processed = 0
                 saved = storage.save_post(
                     post,
                     download_images=(True if reprocess_ocr else dl_images),
